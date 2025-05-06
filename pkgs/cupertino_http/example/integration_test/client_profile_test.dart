@@ -164,7 +164,8 @@ void main() {
         expect(profile.requestData.bodyBytes, 'Hi'.codeUnits);
         expect(profile.requestData.contentLength, 2);
         expect(profile.requestData.endTime, isNotNull);
-        expect(profile.requestData.error, startsWith('ClientException:'));
+        expect(
+            profile.requestData.error, startsWith('NSErrorClientException:'));
         expect(
             profile.requestData.headers, containsPair('Content-Length', ['2']));
         expect(profile.requestData.headers,
@@ -247,7 +248,8 @@ void main() {
         expect(profile.responseData.compressionState, isNull);
         expect(profile.responseData.contentLength, 11);
         expect(profile.responseData.endTime, isNotNull);
-        expect(profile.responseData.error, startsWith('ClientException:'));
+        expect(
+            profile.responseData.error, startsWith('NSErrorClientException:'));
         expect(profile.responseData.headers,
             containsPair('content-type', ['text/plain']));
         expect(profile.responseData.headers,
@@ -258,6 +260,55 @@ void main() {
         expect(profile.responseData.redirects, isEmpty);
         expect(profile.responseData.startTime, isNotNull);
         expect(profile.responseData.statusCode, 200);
+      });
+    });
+
+    group('cancel streaming GET response', () {
+      late HttpServer successServer;
+      late Uri successServerUri;
+      late HttpClientRequestProfile profile;
+      late List<int> receivedData;
+
+      setUpAll(() async {
+        successServer = (await HttpServer.bind('localhost', 0))
+          ..listen((request) async {
+            await request.drain<void>();
+            request.response.headers.set('Content-Type', 'text/plain');
+            while (true) {
+              request.response.write('Hello World');
+              await request.response.flush();
+              await Future<void>.delayed(const Duration(seconds: 0));
+            }
+          });
+        final cancelCompleter = Completer<void>();
+        successServerUri = Uri.http('localhost:${successServer.port}');
+        final client = CupertinoClientWithProfile.defaultSessionConfiguration();
+        final request = StreamedRequest('GET', successServerUri);
+        unawaited(request.sink.close());
+        final response = await client.send(request);
+
+        var i = 0;
+        late final StreamSubscription<List<int>> s;
+        receivedData = [];
+        s = response.stream.listen((d) {
+          receivedData += d;
+          if (++i == 1000) {
+            s.cancel();
+            cancelCompleter.complete();
+          }
+        });
+        await cancelCompleter.future;
+        profile = client.profile!;
+      });
+      tearDownAll(() {
+        successServer.close();
+      });
+
+      test('request attributes', () async {
+        expect(profile.requestData.contentLength, isNull);
+        expect(profile.requestData.startTime, isNotNull);
+        expect(profile.requestData.endTime, isNotNull);
+        expect(profile.responseData.bodyBytes, receivedData);
       });
     });
 
