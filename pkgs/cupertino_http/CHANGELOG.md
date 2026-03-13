@@ -1,3 +1,20 @@
+## 3.0.0-wip
+
+* Remove `shouldUseExtendedBackgroundIdleMode` from `URLSessionConfiguration`.
+* Fix a bug where close reasons not containing valid UTF-8 would cause an
+  uncatchable exception to be thrown.
+* Exclude unnecessary generated code. Slightly reduces disk space requirements.
+
+## 2.4.0
+
+* Switch to `package:objective_c` `9.1.0` and `package:ffigen` `20.1.0`.
+* Add URL to thrown `RequestAbortedException`.
+ 
+## 2.3.0
+
+* Add the ability to abort requests.
+* Make `ConnectionException.toString` more helpful.
+
 ## 2.2.0
 
 * Cancel requests when the response stream is cancelled.

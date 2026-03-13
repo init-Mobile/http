@@ -82,6 +82,56 @@ class UserAgentClient extends http.BaseClient {
   }
 }
 ```
+## Testing
+
+For better testability, especially in Flutter applications, it's recommended
+to use a [Client][] instance rather than the top-level functions like
+`http.get()` or `http.post()`. This approach makes it easier to mock HTTP
+requests in your tests.
+
+```dart
+// Instead of using static methods (harder to test):
+// var response = await http.get(Uri.https('example.com', 'data.json'));
+
+// Use a Client instance (easier to test):
+class DataService {
+  final http.Client client;
+
+  DataService({http.Client? client}) : client = client ?? http.Client();
+
+  Future<String> fetchData() async {
+    var response = await client.get(Uri.https('example.com', 'data.json'));
+    return response.body;
+  }
+}
+```
+
+In your tests, you can easily mock the HTTP client:
+
+```dart
+import 'package:http/testing.dart';
+import 'package:test/test.dart';
+
+void main() {
+  test('fetchData returns expected data', () async {
+    final mockClient = MockClient((request) async {
+      return http.Response('{"key": "value"}', 200);
+    });
+
+    final dataService = DataService(client: mockClient);
+    final result = await dataService.fetchData();
+
+    expect(result, '{"key": "value"}');
+  });
+}
+```
+
+> [!TIP]
+> You can also use `package:mockito` to mock `http.Client`.
+> For more detailed guidance, see the
+> [Flutter testing cookbook](https://docs.flutter.dev/cookbook/testing/unit/mocking),
+> which demonstrates best practices for mocking HTTP requests.
+
 
 ## Retrying requests
 
@@ -112,6 +162,92 @@ and increases the delay by 1.5x each time. All of this can be customized using
 the [`RetryClient()`][new RetryClient] constructor.
 
 [new RetryClient]: https://pub.dev/documentation/http/latest/retry/RetryClient/RetryClient.html
+
+## Aborting requests
+
+Some clients, such as [`BrowserClient`][browserclient], [`IOClient`][ioclient], and
+[`RetryClient`][retryclient], support aborting requests before they complete.
+
+Aborting in this way can only be performed when using [`Client.send`][clientsend] or
+[`BaseRequest.send`][baserequestsend] with an [`Abortable`][abortable] request (such
+as [`AbortableRequest`][abortablerequest]).
+
+To abort a request, complete the [`Abortable.abortTrigger`][aborttrigger] `Future`.
+
+If the request is aborted before the response `Future` completes, then the response
+`Future` will complete with [`RequestAbortedException`][requestabortedexception]. If
+the response is a `StreamedResponse` and the the request is cancelled while the
+response stream is being consumed, then the response stream will contain a
+[`RequestAbortedException`][requestabortedexception].
+
+```dart
+import 'dart:async';
+
+import 'package:http/http.dart' as http;
+
+Future<void> main() async {
+  final abortTrigger = Completer<void>();
+  final client = Client();
+  final request = AbortableRequest(
+    'GET',
+    Uri.https('example.com'),
+    abortTrigger: abortTrigger.future,
+  );
+
+  // Whenever abortion is required:
+  // > abortTrigger.complete();
+
+  // Send request
+  final StreamedResponse response;
+  try {
+    response = await client.send(request);
+  } on RequestAbortedException {
+    // request aborted before it was fully sent
+    rethrow;
+  }
+
+  // Using full response bytes listener
+  response.stream.listen(
+    (data) {
+      // consume response bytes
+    },
+    onError: (Object err) {
+      if (err is RequestAbortedException) {
+        // request aborted whilst response bytes are being streamed;
+        // the stream will always be finished early
+      }
+    },
+    onDone: () {
+      // response bytes consumed, or partially consumed if finished
+      // early due to abortion
+    },
+  );
+
+  // Alternatively, using `asFuture`
+  try {
+    await response.stream.listen(
+      (data) {
+        // consume response bytes
+      },
+    ).asFuture<void>();
+  } on RequestAbortedException {
+    // request aborted whilst response bytes are being streamed
+    rethrow;
+  }
+    // response bytes fully consumed
+}
+```
+
+[browserclient]: https://pub.dev/documentation/http/latest/browser_client/BrowserClient-class.html
+[ioclient]: https://pub.dev/documentation/http/latest/io_client/IOClient-class.html
+[retryclient]: https://pub.dev/documentation/http/latest/retry/RetryClient-class.html
+[clientsend]: https://pub.dev/documentation/http/latest/http/Client/send.html
+[baserequestsend]: https://pub.dev/documentation/http/latest/http/BaseRequest/send.html
+[abortable]: https://pub.dev/documentation/http/latest/http/Abortable-class.html
+[abortablerequest]: https://pub.dev/documentation/http/latest/http/AbortableRequest-class.html
+[aborttrigger]: https://pub.dev/documentation/http/latest/http/Abortable/abortTrigger.html
+[requestabortedexception]: https://pub.dev/documentation/http/latest/http/RequestAbortedException-class.html
+
 
 ## Choosing an implementation
 
