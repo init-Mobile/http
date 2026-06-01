@@ -117,7 +117,7 @@ class IOClient extends BaseClient {
         ..contentLength = (request.contentLength ?? -1)
         ..persistentConnection = request.persistentConnection;
       request.headers.forEach((name, value) {
-        ioRequest.headers.set(name, value);
+        ioRequest.headers.set(name, value, preserveHeaderCase: true);
       });
 
       // SDK request aborting is only effective up until the request is closed,
@@ -230,13 +230,6 @@ class IOClient extends BaseClient {
     }
   }
 
-  /// Closes the client.
-  ///
-  /// Terminates all active connections. If a client remains unclosed, the Dart
-  /// process may not terminate.
-  ///
-  /// The behavior of `close` is not defined if there are requests executing
-  /// when `close` is called.
   @override
   void close() {
     if (_inner != null) {

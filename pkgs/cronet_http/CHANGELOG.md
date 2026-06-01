@@ -1,3 +1,11 @@
+## 1.9.0-wip
+
+* Add `CronetEngine.startNetLogToFile` and `CronetEngine.stopNetLog`.
+* Decode Java `CronetException` into Dart equivalents.
+* Upgrade to Cronet 18.1.1.
+* Upgrade Kotlin Gradle Plugin version to 2.1.0 for compatibility with the
+  upgraded Cronet dependency.
+
 ## 1.8.0
 
 * Made callbacks asynchronous to prevent background errors caused by the
